@@ -430,6 +430,7 @@ KERNEL_MODULES_PARTITION_FILE_LIST := $(vendorimage_intermediates)/file_list.txt
 else # No vendor partition
 KERNEL_MODULES_PARTITION_FILE_LIST := $(systemimage_intermediates)/file_list.txt
 KERNEL_MODULES_FILE_LIST_PREFIX := vendor/
+$(BUILT_SYSTEMIMAGE): $(TARGET_PREBUILT_INT_KERNEL)
 endif # BUILDING_VENDOR_IMAGE
 $(INSTALLED_VENDORIMAGE_TARGET): $(TARGET_PREBUILT_INT_KERNEL)
 endif
