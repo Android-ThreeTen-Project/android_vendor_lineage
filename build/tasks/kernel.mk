@@ -375,6 +375,7 @@ endef
 # $(6): suffix for output dir, needed for GKI modules usecase, empty otherwise
 # $(7): partition image intermediates file list
 # $(8): external dependency module intermediates dir
+# $(9): path prefix inside the partition for legacy system/vendor layouts
 # Depmod requires a well-formed kernel version so 0.0 is used as a placeholder.
 define build-image-kernel-modules-lineage
     mkdir -p $(2)/lib/modules$(6)
@@ -408,13 +409,13 @@ define build-image-kernel-modules-lineage
         exit 1; \
     fi; \
     if [ -n "$(7)" ]; then \
-        echo lib/modules$(6)/modules.alias >> "$(7)"; \
-        echo lib/modules$(6)/modules.dep >> "$(7)"; \
-        if [ ! -z "$(5)" ]; then echo lib/modules$(6)/modules.load >> "$(7)"; fi; \
-        echo lib/modules$(6)/modules.softdep >> "$(7)"; \
+        echo $(9)lib/modules$(6)/modules.alias >> "$(7)"; \
+        echo $(9)lib/modules$(6)/modules.dep >> "$(7)"; \
+        if [ ! -z "$(5)" ]; then echo $(9)lib/modules$(6)/modules.load >> "$(7)"; fi; \
+        echo $(9)lib/modules$(6)/modules.softdep >> "$(7)"; \
         for MODULE in $(1); do \
             BASENAME=$$(basename $$MODULE); \
-            echo lib/modules$(6)/"$$BASENAME" >> "$(7)"; \
+            echo $(9)lib/modules$(6)/"$$BASENAME" >> "$(7)"; \
         done; \
         sort -u "$(7)" -o "$(7)"; \
     fi;
@@ -452,6 +453,8 @@ ifneq ($(BUILDING_VENDOR_IMAGE),)
 KERNEL_MODULES_PARTITION_FILE_LIST := $(vendorimage_intermediates)/file_list.txt
 else # No vendor partition
 KERNEL_MODULES_PARTITION_FILE_LIST := $(systemimage_intermediates)/file_list.txt
+KERNEL_MODULES_FILE_LIST_PREFIX := vendor/
+$(BUILT_SYSTEMIMAGE): $(TARGET_PREBUILT_INT_KERNEL)
 endif # BUILDING_VENDOR_IMAGE
 $(INSTALLED_VENDORIMAGE_TARGET): $(TARGET_PREBUILT_INT_KERNEL)
 endif
@@ -547,14 +550,14 @@ $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_CONFIG) $(DEPMOD) $(DTC) $(KERNEL_MODULE
 					module_name=$$(basename $$n); \
 					if [[ ! "$(SYSTEM_KERNEL_MODULES)" =~ "$$module_name" ]]; then echo $$n; fi; \
 				done); \
-				($(call build-image-kernel-modules-lineage,$$filtered_modules,$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$(BOARD_VENDOR_KERNEL_MODULES_LOAD),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT))) || exit "$$?"; \
+				($(call build-image-kernel-modules-lineage,$$filtered_modules,$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$(BOARD_VENDOR_KERNEL_MODULES_LOAD),,$(KERNEL_MODULES_PARTITION_FILE_LIST),$(SYSTEM_KERNEL_DEPMOD_STAGING_DIR)/lib/modules/0.0/$(SYSTEM_KERNEL_MODULE_MOUNTPOINT),$(KERNEL_MODULES_FILE_LIST_PREFIX))) || exit "$$?"; \
 				(for m in $$(find $(SYSTEM_KERNEL_MODULES_OUT) -type f -name "*.ko"); do \
 					$(KERNEL_OUT)/scripts/sign-file sha1 \
 					$(KERNEL_OUT)/certs/signing_key.pem \
 					$(KERNEL_OUT)/certs/signing_key.x509 "$$m"; \
 				done) || exit "$$?"; \
 				,\
-				($(call build-image-kernel-modules-lineage,$$all_modules,$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$(BOARD_VENDOR_KERNEL_MODULES_LOAD),,$(KERNEL_MODULES_PARTITION_FILE_LIST),)) || exit "$$?"; \
+				($(call build-image-kernel-modules-lineage,$$all_modules,$(KERNEL_MODULES_OUT),$(KERNEL_MODULE_MOUNTPOINT)/,$(KERNEL_DEPMOD_STAGING_DIR),$(BOARD_VENDOR_KERNEL_MODULES_LOAD),,$(KERNEL_MODULES_PARTITION_FILE_LIST),,$(KERNEL_MODULES_FILE_LIST_PREFIX))) || exit "$$?"; \
 			) \
 			$(if $(BOOT_KERNEL_MODULES),\
 				vendor_boot_modules=$$(for m in $(BOOT_KERNEL_MODULES); do \
