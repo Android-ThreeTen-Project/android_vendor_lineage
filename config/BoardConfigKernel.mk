@@ -107,6 +107,16 @@ endif
 
 TARGET_KERNEL_RUST_VERSION ?= $(RUST_AOSP_PREBUILTS_VERSION)
 
+# This uses the host xz through Android's path_interposer. Android's
+# path_interposer enable to run only selected host binaries. To do that the
+# previous PATH is saved in a file and then during the build it's not available
+# anymore. The path_interposer is then able to use that saved PATH to run a
+# given binary if the TEMPORARY_DISABLE_PATH_RESTRICTIONS environment variable
+# is set to true or if the binary to run is whitelisted by in a file like
+# build/soong/ui/build/paths/config.go. See the path_interposer source in
+# build/soong/cmd/path_interposer for more details).
+KERNEL_XZ := $(BUILD_TOP)/out/.path/xz
+
 ifneq ($(USE_CCACHE),)
     ifneq ($(CCACHE_EXEC),)
         # Android 10+ deprecates use of a build ccache. Only system installed ones are now allowed
@@ -152,6 +162,34 @@ KERNEL_MAKE_FLAGS += -j$(shell getconf _NPROCESSORS_ONLN)
 TOOLS_PATH_OVERRIDE := \
     HIP_PATH=none PERL5LIB=$(BUILD_TOP)/prebuilts/tools-lineage/common/perl-base
 
+ifeq ($(TARGET_KERNEL_CLANG_COMPILE),false)
+    # Linux 3.10 device kernels still require the legacy ARM GCC toolchains.
+    GCC_PREBUILTS := $(BUILD_TOP)/prebuilts/gcc/$(HOST_PREBUILT_TAG)
+    KERNEL_TOOLCHAIN_arm := $(GCC_PREBUILTS)/arm/arm-linux-androideabi-4.9/bin
+    KERNEL_TOOLCHAIN_PREFIX_arm := arm-linux-androidkernel-
+    KERNEL_TOOLCHAIN_arm64 := $(GCC_PREBUILTS)/aarch64/aarch64-linux-android-4.9/bin
+    KERNEL_TOOLCHAIN_PREFIX_arm64 := aarch64-linux-android-
+    ifneq ($(strip $(TARGET_KERNEL_CROSS_COMPILE_PREFIX)),)
+        KERNEL_TOOLCHAIN_PREFIX ?= $(strip $(TARGET_KERNEL_CROSS_COMPILE_PREFIX))
+    else
+        KERNEL_TOOLCHAIN ?= $(KERNEL_TOOLCHAIN_$(KERNEL_ARCH))
+        KERNEL_TOOLCHAIN_PREFIX ?= $(KERNEL_TOOLCHAIN_PREFIX_$(KERNEL_ARCH))
+    endif
+    KERNEL_TOOLCHAIN_PATH := $(if $(KERNEL_TOOLCHAIN),$(KERNEL_TOOLCHAIN)/)$(KERNEL_TOOLCHAIN_PREFIX)
+    KERNEL_CROSS_COMPILE := CROSS_COMPILE="$(CCACHE_BIN) $(KERNEL_TOOLCHAIN_PATH)"
+    ifeq ($(KERNEL_ARCH),arm64)
+        KERNEL_CROSS_COMPILE += CROSS_COMPILE_ARM32="$(KERNEL_TOOLCHAIN_arm)/$(KERNEL_TOOLCHAIN_PREFIX_arm)"
+        KERNEL_CROSS_COMPILE += CROSS_COMPILE_COMPAT="$(KERNEL_TOOLCHAIN_arm)/$(KERNEL_TOOLCHAIN_PREFIX_arm)"
+    endif
+    KERNEL_MAKE_FLAGS += CFLAGS_MODULE="-fno-pic"
+    KERNEL_MAKE_FLAGS += HOSTCFLAGS="-I/usr/include -I/usr/include/x86_64-linux-gnu"
+    KERNEL_MAKE_FLAGS += HOSTLDFLAGS="-L/usr/lib/x86_64-linux-gnu -L/usr/lib64 -fuse-ld=lld"
+    KERNEL_MAKE_FLAGS += HOSTAR=$(TARGET_KERNEL_CLANG_PATH)/bin/llvm-ar
+    KERNEL_MAKE_FLAGS += HOSTCC=$(TARGET_KERNEL_CLANG_PATH)/bin/clang
+    KERNEL_MAKE_FLAGS += HOSTLD=$(TARGET_KERNEL_CLANG_PATH)/bin/ld.lld
+    KERNEL_MAKE_FLAGS += HOSTCXX=$(TARGET_KERNEL_CLANG_PATH)/bin/clang++
+    TOOLS_PATH_OVERRIDE += PATH=$(KERNEL_TOOLCHAIN_$(KERNEL_ARCH)):$(KERNEL_TOOLCHAIN_arm):$$PATH
+else
 ifeq ($(TARGET_KERNEL_LIBC_SYSROOT_USE), host)
     KERNEL_HOST_C_LD_FLAGS_SYSROOT :=
 else
@@ -160,6 +198,7 @@ endif
 
 KERNEL_MAKE_FLAGS += HOSTCFLAGS="$(KERNEL_HOST_C_LD_FLAGS_SYSROOT) -I$(BUILD_TOP)/prebuilts/kernel-build-tools/linux-x86/include"
 KERNEL_MAKE_FLAGS += HOSTLDFLAGS="$(KERNEL_HOST_C_LD_FLAGS_SYSROOT) -Wl,-rpath,$(BUILD_TOP)/prebuilts/kernel-build-tools/linux-x86/lib64 -L $(BUILD_TOP)/prebuilts/kernel-build-tools/linux-x86/lib64 -fuse-ld=lld --rtlib=compiler-rt"
+endif
 
 TOOLS_PATH_OVERRIDE += PATH=$(BUILD_TOP)/prebuilts/tools-lineage/$(HOST_PREBUILT_TAG)/bin:$(BUILD_TOP)/prebuilts/build-tools/$(HOST_PREBUILT_TAG)/bin:$(TARGET_KERNEL_CLANG_PATH)/bin:$(BUILD_TOP)/prebuilts/rust-toolchain/$(HOST_PREBUILT_TAG)/$(TARGET_KERNEL_RUST_VERSION)/bin:$(BUILD_TOP)/prebuilts/clang-tools/$(HOST_PREBUILT_TAG)/bin:$$PATH
 
@@ -181,7 +220,9 @@ TARGET_KERNEL_EXT_MODULES ?=
 KERNEL_MAKE_CMD := $(BUILD_TOP)/prebuilts/build-tools/$(HOST_PREBUILT_TAG)/bin/make
 
 # Use LLVM's substitutes for GNU binutils
+ifneq ($(TARGET_KERNEL_CLANG_COMPILE),false)
 KERNEL_MAKE_FLAGS += LLVM=1 LLVM_IAS=1
+endif
 
 # Pass prebuilt LZ4 path
 KERNEL_MAKE_FLAGS += LZ4=$(BUILD_TOP)/prebuilts/kernel-build-tools/linux-x86/bin/lz4

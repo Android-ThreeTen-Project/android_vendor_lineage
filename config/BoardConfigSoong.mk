@@ -8,6 +8,7 @@ EXPORT_TO_SOONG := \
     KERNEL_MAKE_CMD \
     KERNEL_MAKE_FLAGS \
     KERNEL_PATH \
+    KERNEL_XZ \
     PATH_OVERRIDE_SOONG \
     TARGET_KERNEL_CONFIG \
     TARGET_KERNEL_SOURCE \
@@ -21,6 +22,15 @@ EXPORT_TO_SOONG := \
 
 $(call add_soong_config_namespace,lineageVarsPlugin)
 $(foreach v,$(EXPORT_TO_SOONG),$(eval $(call add_soong_config_var,lineageVarsPlugin,$(v))))
+
+# Ultra-legacy compatibility options consumed by defaults in build/soong.
+$(call soong_config_set,lineageGlobalVars,target_process_sdk_version_override,$(TARGET_PROCESS_SDK_VERSION_OVERRIDE))
+$(call soong_config_set_bool,lineageGlobalVars,disable_postrender_cleanup,$(TARGET_DISABLE_POSTRENDER_CLEANUP))
+$(call soong_config_set_bool,lineageGlobalVars,has_memfd_backport,$(TARGET_HAS_MEMFD_BACKPORT))
+$(call soong_config_set_bool,lineageQcomVars,uses_qcom_bsp_legacy,$(TARGET_USES_QCOM_BSP_LEGACY))
+
+TARGET_SPECIFIC_CAMERA_PARAMETER_LIBRARY ?= libcamera_parameters
+$(call soong_config_set,lineageGlobalVars,uses_camera_parameter_lib,$(TARGET_SPECIFIC_CAMERA_PARAMETER_LIBRARY))
 
 # Bootanimation
 TARGET_BOOTANIMATION_HALF_RES ?= false

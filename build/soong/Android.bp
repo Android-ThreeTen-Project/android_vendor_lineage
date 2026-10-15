@@ -31,6 +31,7 @@ lineage_generator {
          "    gzip -d $(genDir)/kernel-uapi-headers.tar.gz; " +
          "    tar -xf $(genDir)/kernel-uapi-headers.tar -C $(genDir); " +
          "else " +
+         "    mkdir -p $(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
          "    $(PATH_OVERRIDE_SOONG) $(KERNEL_MAKE_CMD) $(KERNEL_MAKE_FLAGS) -C $(TARGET_KERNEL_SOURCE) O=$(KERNEL_BUILD_OUT_PREFIX)$(genDir) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) headers_install; " +
          "fi; " +
          "vendor/lineage/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir))",
@@ -112,4 +113,91 @@ cc_library_headers {
 cc_library_headers {
     name: "prebuilt_kernel_headers",
     defaults: ["prebuilt_kernel_header_defaults"],
+}
+
+// Ultra-legacy device compatibility defaults. Keep these on the modern
+// soong_config_set path instead of restoring the removed global config table.
+soong_config_module_type {
+    name: "target_process_sdk_version_overrides",
+    module_type: "cc_defaults",
+    config_namespace: "lineageGlobalVars",
+    value_variables: ["target_process_sdk_version_override"],
+    properties: ["cppflags"],
+}
+
+target_process_sdk_version_overrides {
+    name: "process_sdk_version_overrides_defaults",
+    soong_config_variables: {
+        target_process_sdk_version_override: {
+            cppflags: ["-DSDK_VERSION_OVERRIDES=\"%s\""],
+        },
+    },
+}
+
+soong_config_module_type {
+    name: "disable_postrender_cleanup",
+    module_type: "cc_defaults",
+    config_namespace: "lineageGlobalVars",
+    bool_variables: ["disable_postrender_cleanup"],
+    properties: ["cppflags"],
+}
+
+disable_postrender_cleanup {
+    name: "disable_postrender_cleanup_defaults",
+    soong_config_variables: {
+        disable_postrender_cleanup: {
+            cppflags: ["-DDISABLE_POSTRENDER_CLEANUP"],
+        },
+    },
+}
+
+soong_config_module_type {
+    name: "has_memfd_backport",
+    module_type: "cc_defaults",
+    config_namespace: "lineageGlobalVars",
+    bool_variables: ["has_memfd_backport"],
+    properties: ["cppflags"],
+}
+
+has_memfd_backport {
+    name: "has_memfd_backport_defaults",
+    soong_config_variables: {
+        has_memfd_backport: {
+            cppflags: ["-DHAS_MEMFD_BACKPORT"],
+        },
+    },
+}
+
+soong_config_module_type {
+    name: "stagefright_qcom_legacy",
+    module_type: "cc_defaults",
+    config_namespace: "lineageQcomVars",
+    bool_variables: ["uses_qcom_bsp_legacy"],
+    properties: ["cppflags"],
+}
+
+stagefright_qcom_legacy {
+    name: "stagefright_qcom_legacy_defaults",
+    soong_config_variables: {
+        uses_qcom_bsp_legacy: {
+            cppflags: ["-DQCOM_BSP_LEGACY"],
+        },
+    },
+}
+
+soong_config_module_type {
+    name: "camera_parameter_library",
+    module_type: "cc_defaults",
+    config_namespace: "lineageGlobalVars",
+    value_variables: ["uses_camera_parameter_lib"],
+    properties: ["whole_static_libs"],
+}
+
+camera_parameter_library {
+    name: "camera_parameter_library_defaults",
+    soong_config_variables: {
+        uses_camera_parameter_lib: {
+            whole_static_libs: ["%s"],
+        },
+    },
 }
